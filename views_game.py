@@ -4,6 +4,10 @@ from models import Jogos
 from helpers import recupera_imagem, deleta_arquivo, FormularioJogo
 import time
 
+@app.route('/principal')
+def home():
+    lista = Jogos.query.order_by(Jogos.id)
+    return render_template('principal.html',  jogos=lista)
 
 @app.route('/')
 def index():
@@ -34,14 +38,22 @@ def criar():
         flash('Jogo já existente!')
         return redirect(url_for('index'))
 
-    novo_jogo = Jogos(nome=nome, categoria=categoria, console=console)
-    db.session.add(novo_jogo)
-    db.session.commit()
 
-    arquivo = request.files['arquivo']
-    upload_path = app.config['UPLOAD_PATH']
-    timestamp = time.time()
-    arquivo.save(f'{upload_path}/capa{novo_jogo.id}-{timestamp}.jpg')
+        # Trata o upload da imagem
+    if 'arquivo' in request.files and request.files['arquivo'].filename != '':
+        arquivo = request.files['arquivo']
+        upload_path = app.config['UPLOAD_PATH']
+        timestamp = time.time()
+        nome_arquivo = f'capa{timestamp}.jpg'
+
+        # Salva o arquivo no diretório
+        arquivo.save(f'{upload_path}/{nome_arquivo}')
+
+
+
+        novo_jogo = Jogos(nome=nome, categoria=categoria, console=console,imagem=nome_arquivo)
+        db.session.add(novo_jogo)
+        db.session.commit()
 
     return redirect(url_for('index'))
 
@@ -49,6 +61,7 @@ def criar():
 def editar(id):
     if 'usuario_logado' not in session or session['usuario_logado'] == None:
         return redirect(url_for('login', proxima=url_for('editar', id=id)))
+
     jogo = Jogos.query.filter_by(id=id).first()
     form = FormularioJogo()
     form.nome.data = jogo.nome
@@ -62,19 +75,36 @@ def atualizar():
     form = FormularioJogo(request.form)
 
     if form.validate_on_submit():
+
+        # Captura o jogo que será atualizado
         jogo = Jogos.query.filter_by(id=request.form['id']).first()
+
+        # Atualiza os campos do jogo
         jogo.nome = form.nome.data
         jogo.categoria = form.categoria.data
         jogo.console = form.console.data
 
+        # Se houver um novo arquivo enviado, processa a imagem
+        if 'arquivo' in request.files:
+            foto = request.files['arquivo']
+
+        # Define o caminho e o nome do arquivo
+        upload_path = app.config['UPLOAD_PATH']
+        timestamp = time.time()
+        nome_arquivo = f'capa{jogo.id}-{timestamp}.jpg'
+
+       # deleta_arquivo(jogo.id)
+
+        # Salva a nova imagem
+        foto.save(f'{upload_path}/{nome_arquivo}')
+
+        # Atualiza o campo 'imagem' do jogo com o nome do arquivo
+        jogo.imagem = nome_arquivo
+
         db.session.add(jogo)
         db.session.commit()
 
-        arquivo = request.files['arquivo']
-        upload_path = app.config['UPLOAD_PATH']
-        timestamp = time.time()
-        deleta_arquivo(id)
-        arquivo.save(f'{upload_path}/capa{jogo.id}-{timestamp}.jpg')
+
 
     return redirect(url_for('index'))
 
